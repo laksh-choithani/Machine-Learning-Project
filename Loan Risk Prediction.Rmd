@@ -1,0 +1,688 @@
+---
+title: "DDA_project"
+author: "Laksh 2515288"
+output:
+  word_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 0. Instructions 
+
+```{r}
+# load all the required libraries with `library()`. 
+
+library(dplyr)         # Used for data cleaning, filtering, and transforming columns
+library(ggplot2)       # Used for creating static visualizations during EDA (histograms, boxplots, etc.)
+library(validate)      # Used for checking data quality and defining validation rules
+library(tidyverse)     # Core data science tools (includes dplyr and ggplot2) used throughout data preprocessing
+library(Hmisc)         # Used for handling missing values and summarizing data (e.g., using impute())
+library(psych)         # Used for descriptive statistics (e.g., skewness, kurtosis, summary tables)
+library(e1071)         # Used for calculating skewness and kurtosis of variables
+library(VIM)           # Used for visualizing and analyzing missing data (e.g., aggr plot)
+library(corrplot)      # Used to visualize the correlation matrix for numerical features
+library(RColorBrewer)  # Used to apply color palettes to correlation and clustering plots
+library(caret)         # Core package for model training, hyperparameter tuning, and performance evaluation
+library(plotly)        # Used to create interactive visualizations (optional for web-based plots)
+library(cluster)       # Used for clustering analysis (e.g., silhouette scores, k-means clustering)
+library(mclust)        # Used for model-based clustering and identifying optimal number of clusters
+library(randomForest)  # Used to train the Random Forest model and analyze variable importance
+library(rpart)         # Used for training decision trees (optional baseline model)
+library(pROC)          # Used for plotting ROC curves and calculating AUC for each class
+library(MLmetrics)     # Used to calculate classification metrics such as F1-Score, LogLoss, and Accuracy
+
+
+```
+
+# 1. ORGANIZE AND CLEAN THE DATA
+
+## 1.1 Data quality plan
+```{r}
+# Load the dataset
+financial_df <- read.csv('financial_risk_assessment.csv')
+
+# Get the structure of the dataset (data types and first few rows of each column)
+str(financial_df) 
+
+# Get summary statistics for all variables in the dataset
+summary(financial_df) 
+
+# Gender Encoding
+financial_df$Gender <- as.factor(financial_df$Gender)
+
+# Education Level Encoding
+financial_df$Education.Level <- as.factor(financial_df$Education.Level)
+
+# Marital Status Encoding
+financial_df$Marital.Status <- as.factor(financial_df$Marital.Status)
+
+# Loan Purpose Encoding
+financial_df$Loan.Purpose <- as.factor(financial_df$Loan.Purpose)
+
+# Employment Status Encoding
+financial_df$Employment.Status <- as.factor(financial_df$Employment.Status)
+
+# Payment History Encoding
+financial_df$Payment.History <- as.factor(financial_df$Payment.History)
+
+# Risk Rating Encoding
+financial_df$Risk.Rating <- as.factor(financial_df$Risk.Rating)
+
+```
+
+
+Our dataset consists of 20 variables (columns) and 15,000 rows (observations).
+
+The dataset contains two types of variables:
+
+. Numerical variables: Age, Income, Credit Score, Loan Amount, Years at Current Job, Debt-to-Income Ratio, Assets Value, Number of Dependents, Previous Defaults, Marital Status Change.
+
+. Categorical variables: Gender, Education Level, Marital Status, Loan Purpose, Employment Status, Payment History, City, State, Country, Risk Rating.
+
+but City, State, and Country variables are not relevant for risk prediction so we remove these variables.
+
+## 1.2 Remove location based variables 
+```{r}
+financial_df <- financial_df[, !(names(financial_df) %in% c('City' , 'State', 'Country'))]
+str(financial_df)
+```
+Now dataset consists of 17 variables (columns) and 15,000 rows (observations).
+
+## 1.3 Data quality findings
+```{r}
+# Check for missing values in each column
+colSums(is.na(financial_df))
+
+sum(duplicated(financial_df))
+
+# Frequency tables for categorical variables
+
+table(financial_df$Gender)
+table(financial_df$Education.Level)
+table(financial_df$Marital.Status)
+table(financial_df$Loan.Purpose)
+table(financial_df$Employment.Status)
+table(financial_df$Payment.History)
+table(financial_df$Risk.Rating)
+```
+
+
+
+There are no missing values in the categorical variables, and they appear to be correctly formatted. However, some numerical columns contain missing values (NA’s), affecting approximately 15% of the dataset. These missing values need to be cleaned before further analysis.
+
+## 2 CLEANING + EDA(EXPLORATORY DATA ANALYSIS)
+
+# 2.1 check whether Data is skewed or not by using histogram and also check exact number 
+
+```{r}
+#######   Distribution of Income   #######
+# More complete histogram with density curve
+{
+hist(financial_df$Income, 
+     breaks=60, 
+     probability=TRUE, 
+     col="lightblue",
+     main="Distribution of Income",
+     xlab="Income")
+lines(density(financial_df$Income,na.rm = TRUE), col="red", lwd=2)
+
+# Add mean line
+abline(v=mean(financial_df$Income, na.rm=TRUE), 
+       col="darkblue", lwd=2, lty=2)
+
+# Add median line
+abline(v=median(financial_df$Income, na.rm=TRUE), 
+       col="darkgreen", lwd=2, lty=3)
+}
+
+# Check the skewness of Income in Numbers
+skewness(financial_df$Income, na.rm = TRUE)
+
+######  Distribution of Credit.Score  #####
+# More complete histogram with density curve
+{
+hist(financial_df$Credit.Score, 
+     breaks=20, 
+     probability=TRUE, 
+     col="lightblue",
+     main="Distribution of Credit.Score",
+     xlab="Credit.Score")
+lines(density(financial_df$Credit.Score,na.rm = TRUE), col="red", lwd=2)
+
+# Add mean line
+abline(v=mean(financial_df$Credit.Score, na.rm=TRUE), 
+       col="darkblue", lwd=2, lty=2)
+
+# Add median line
+abline(v=median(financial_df$Credit.Score, na.rm=TRUE), 
+       col="darkgreen", lwd=2, lty=3)
+}
+
+# Check the skewness of Credit.Score in Numbers
+skewness(financial_df$Credit.Score, na.rm = TRUE)
+
+######   Distribution of Loan.Amount    ######
+# More complete histogram with density curve
+{
+hist(financial_df$Loan.Amount, 
+     breaks=20, 
+     probability=TRUE, 
+     col="lightblue",
+     main="Distribution of Loan.Amount",
+     xlab="Loan.Amount")
+lines(density(financial_df$Loan.Amount,na.rm = TRUE), col="red", lwd=2)
+
+# Add mean line
+abline(v=mean(financial_df$Loan.Amount, na.rm=TRUE), 
+       col="darkblue", lwd=2, lty=2)
+
+# Add median line
+abline(v=median(financial_df$Loan.Amount, na.rm=TRUE), 
+       col="darkgreen", lwd=2, lty=3)
+}
+
+# Check the skewness of Loan.Amount in Numbers
+skewness(financial_df$Loan.Amount, na.rm = TRUE)
+
+######    Distribution of Assets.Value     #####
+# More complete histogram with density curve
+{
+hist(financial_df$Assets.Value, 
+     breaks=20, 
+     probability=TRUE, 
+     col="lightblue",
+     main="Distribution of Assets.Value",
+     xlab="Assets.Value")
+lines(density(financial_df$Assets.Value,na.rm = TRUE), col="red", lwd=2)
+
+# Add mean line
+abline(v=mean(financial_df$Assets.Value, na.rm=TRUE), 
+       col="darkblue", lwd=2, lty=2)
+
+# Add median line
+abline(v=median(financial_df$Assets.Value, na.rm=TRUE), 
+       col="darkgreen", lwd=2, lty=3)
+}
+
+# Check the skewness of Assets.Value in Numbers
+skewness(financial_df$Assets.Value, na.rm = TRUE)
+```
+
+
+
+
+Interpretation of skewness 
+if it is == 0 that mean distribution is Normal, Not skewness
+if it is > 0.5 or < -0.5 that mean distribution is Moderately skewed, 
+if it is > 1 or < -1 that mean distribution is Highly skewed. 
+Since all distributions are Normal means not skewed, Mean Imputation is recommended. If the distributions were skewed, Median Imputation would have been a better option.
+
+
+```{r}
+# Impute missing values with the mean for continuous variables
+financial_df$Income[is.na(financial_df$Income)] <- mean(financial_df$Income, na.rm = TRUE)
+
+financial_df$Credit.Score[is.na(financial_df$Credit.Score)] <- mean(financial_df$Credit.Score, na.rm = TRUE)
+
+financial_df$Loan.Amount[is.na(financial_df$Loan.Amount)] <- mean(financial_df$Loan.Amount, na.rm = TRUE)
+
+financial_df$Assets.Value[is.na(financial_df$Assets.Value)] <- mean(financial_df$Assets.Value, na.rm = TRUE)
+
+```
+
+
+
+
+Rather than applying basic mean or median imputation for the discrete variables such as Previous.Defaults and Number.of.Dependents, we opt for K-Nearest Neighbors (KNN) imputation. This method enhances prediction accuracy and assists in uncovering more significant patterns in factors like age, income, and various financial indicators.
+
+# 2.2 Apply KNN imputation on Previous.Defaults and Number.of.Dependents variables
+```{r}
+financial_df <- kNN(financial_df, variable = c('Previous.Defaults', 'Number.of.Dependents'), k=5)
+
+# Remove the _imp indicator columns
+financial_df <- financial_df[, !grepl("_imp", names(financial_df))]
+
+# Display summary statistics after imputation
+str(financial_df) 
+
+colSums(is.na(financial_df))
+```
+# 2.3 Correlation Between features
+
+## 2.3.1 Correlations between Numerical features 
+```{r}
+# Selecting only numerical columns for Linear corrleation
+numeric_df <- financial_df[, sapply(financial_df, is.numeric)]
+
+# Creating a correlation matrix and scatterplot matrix
+{
+psych::pairs.panels(numeric_df, 
+                    method = "pearson",  # Correlation method
+                    hist.col = "lightblue",  # Histogram color
+                    density = TRUE,  # Show density plot
+                    ellipses = TRUE,  # Confidence ellipses
+                    pch = 21, bg = "lightgray",
+                    col = "darkblue",
+                    font.labels = 4,
+                    gap = 0.4)     # Make labels bold-ish
+title("Pairwise Correlation of Financial Features", line = 3, cex.main = 1)
+}
+```
+
+
+## 2.3.2 Correlation between Target Variable with all numeric variables by using Spearman Correlation
+
+Use Spearman Correlation by using Target variable(Risk.Rating) with all numerical variables to check how each feature influences the target variable(Risk.Rating). 
+
+```{r}
+
+# Convert Risk Rating to numeric for Spearman correlation 
+risk_numeric <- as.numeric(financial_df$Risk.Rating)
+# Compute Spearman correlation between Risk Rating and all numeric variables
+Risk_correlations <- sapply(numeric_df, function(x){
+  cor(risk_numeric, x, method = "spearman", use = "complete.obs")
+})
+# Create a data frame from the correlation results
+corr_df <- data.frame(Variable = names(Risk_correlations), spearman_correlation = round(Risk_correlations, 3))
+# Set scale limits for heatmap
+min_val <- min(corr_df$spearman_correlation)
+max_val <- max(corr_df$spearman_correlation)
+#Plot Heatmap to show the correlations
+ggplot(corr_df, aes(x = reorder(Variable, spearman_correlation),
+                    y = "Risk Rating",fill = spearman_correlation)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(spearman_correlation, 2)),color = "black", size = 4, fontface = "bold") +
+  scale_fill_gradient2(low = "yellow", mid = "blue", high = "orange",
+                       midpoint = 0, limits = c(min_val, max_val),name = "Spearman\nCorrelation") +
+  labs(title = "Correlation of Risk Rating with Numerical Features",x = "Variables", y = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"),plot.title = element_text(face = "bold", hjust = 0.5))
+
+```
+
+
+
+In Above Correlations matrixs we have seen that there is no individual relationship between numerical variables and also with the target variable.
+
+
+## 2.4    Boxplots 
+Evaluate how effectively each numeric characteristic distinguishes between the Risk Rating categories and examine the occurrence of outliers in the dataset using boxplots.
+```{r}
+numeric_vars <- c("Age", "Income", "Credit.Score", "Loan.Amount", "Years.at.Current.Job", 
+                  "Debt.to.Income.Ratio", "Assets.Value", "Number.of.Dependents", "Previous.Defaults", "Marital.Status.Change")
+for (var in numeric_vars) {
+  print(
+    ggplot(financial_df, aes(x=Risk.Rating, y=.data[[var]], fill=Risk.Rating)) +
+      geom_boxplot(outlier.shape = 16, outlier.color = "red") +
+      theme_minimal() +
+      labs(title=paste("Boxplot of", var, "by Risk Rating"), 
+           x="Risk Rating", y=var)
+  )
+}
+```
+
+
+## 2.5 PRINCIPAL COMPONENT ANALYSIS 
+
+Perform Principal Component Analysis on the entire dataset while excluding the target variable (Risk.Rating) by utilizing One Hot Encoding. PCA necessitates numeric data since it relies on the covariance structure of the dataset.Perform Principal Component Analysis on the entire dataset while excluding the target variable (Risk.Rating) by utilizing One Hot Encoding. PCA necessitates numeric data since it relies on the covariance structure of the dataset. Since our dataset contains categorical (factor) variables, One Hot Encoding is applied to convert these into binary numeric columns. Although this increases the number of features, PCA will reduce dimensionality while preserving variance.
+```{r}
+# Create dummy encoder for all predictors (excluding target)
+dummies <- dummyVars(~ ., data = financial_df[, names(financial_df) != "Risk.Rating"])
+
+# Apply transformation
+financial_encoded <- predict(dummies, newdata = financial_df)
+
+# Convert to dataframe
+financial_encoded_df <- as.data.frame(financial_encoded)
+
+#Standardizing the data so that all variables contribute equally.
+scaled_df <- scale(financial_encoded_df)
+
+#Apply PCA
+pca_result <- prcomp(scaled_df, center = TRUE, scale. = TRUE)
+
+# View summary of PCA
+summary(pca_result)
+```
+
+```{r}
+# Take first 2  principal components
+pca_df <- as.data.frame(pca_result$x[, 1:2])  # PC1 and PC2
+pca_df$Risk.Rating <- financial_df$Risk.Rating
+str(pca_df)
+```
+
+```{r}
+#plotting the result of pca1 & pca2 over the acutal target variable(Risk.Rating)
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Risk.Rating)) +
+  geom_point(size = 3, alpha = 0.8) +
+  theme_minimal() +
+  labs(title = "PCA Result After One-Hot Encoded Variables",
+       x = "Principal Component 1",
+       y = "Principal Component 2") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+```{r}
+###  calculate the proportion of explained variance (PEV) from the std values
+pca_variance <- pca_result$sdev^2
+pca_var_percent <- round(pca_variance / sum(pca_variance) * 100, 1)
+
+barplot(pca_var_percent,
+        names.arg = paste0("PC", 1:length(pca_var_percent)),
+        main = "Explained Variance by Principal Component",
+        xlab = "Principal Components", ylab = "Variance Explained (%)",
+        col = "lightblue")
+```
+
+```{r}
+###  plot the cumulative PEV
+{
+plot(cumsum(pca_var_percent), type = "b", pch = 19,
+     xlab = "Number of Principal Components",
+     ylab = "Cumulative Variance Explained (%)",
+     main = "Cumulative Explained Variance")
+}
+```
+
+```{r}
+#Plot PC1 Loadings 
+pca1_loadings <- pca_result$rotation[, 1]
+variable <- rownames(pca_result$rotation)
+
+# Create a dataframe
+loadings_df <- data.frame(
+  Variables = variable,
+  Loading = pca1_loadings,
+  Label = variable
+)
+
+p <- ggplot(loadings_df, aes(x = reorder(Label, Loading), y = Loading,
+                             text = paste(Variables, "<br>Loading:", round(Loading, 3)))) +
+  geom_col(fill = "red") +
+  labs(title = "PC1 Loadings",x = "PC1",y = "Loadings Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold"))
+
+#add message on hover when user hover on the bar it sees message shows variable name and loading value by using ggplotly library 
+interactive_plot <- ggplotly(p, tooltip = "text")
+interactive_plot
+
+
+```
+
+
+
+As each principal component contributes equally and maintains all the variance, we cannot lower the dimensionality by eliminating any components. If we are required to keep all the components, then utilizing PCA does not offer any advantages. In simpler terms, PCA does not succeed in uncovering any lower-dimensional patterns in the data. Hence, we will look into another unsupervised method — clustering.
+
+
+## 2.6 CLUSTERING
+## 2.6.1   we use 2 different approaches of clustering to see which one is best fits on our dataset to finds the hidden patterns
+### One is Hierarchical clustering and other one is Kmeans clustering 
+```{r}
+
+# Use Hierarchical cluster
+financial_dist <- dist(financial_encoded_df, method = 'euclidian')
+hierarchical_clust <- hclust(financial_dist, method = "complete")
+
+#plot the Dendrogram 
+plot(hierarchical_clust, hang = -0.1, labels = FALSE, main = "Hierarchical Clustering with Euclidian Distance")
+
+#Select the clusters 
+Reduce_clust_levels <- cutree(hierarchical_clust, k = 3)
+
+#Check each cluster values count 
+table(Reduce_clust_levels)
+
+#contengency table 
+table(Cluster = Reduce_clust_levels, RiskRating = financial_df$Risk.Rating)
+
+# Use K-Mean clustering
+kmeans_result <- kmeans(financial_encoded_df, 3)
+k_cluster_id <- kmeans_result$cluster
+
+# calculate the score 
+hc_cluster_sil <- cluster::silhouette(Reduce_clust_levels, financial_dist)
+kmean_cluster_sil <- cluster::silhouette(k_cluster_id, financial_dist)
+
+# plot the results of the silhoutte analysis for the two cluster solutions
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(2,1))
+plot(hc_cluster_sil)
+plot(kmean_cluster_sil)
+par(opar)
+
+```
+
+
+
+
+We utilized two clustering techniques: Hierarchical clustering and K-means. While the overall silhouette score for K-means was average (0.45), it outperformed hierarchical clustering, suggesting that there may be some underlying group structures present in the data.. Therefore, we decided to use the K-means cluster assignments as an additional feature in our dataset. A new version of the dataset was created with this cluster label appended, and we trained a Random Forest model on it to evaluate whether incorporating this hidden grouping information could enhance classification performance compared to the original model.
+
+
+### 3 MODELING PHASE 
+
+I commence the modeling phase by employing the Random Forest Model, which has been chosen for this project due to its reliability as a non-parametric ensemble method that excels with both numerical and categorical data. It is capable of managing large datasets, minimizes the chances of overfitting, and improves model interpretability by highlighting significant features through its bagging approach. Additionally, it performs well in problems like this one that involve imbalanced classification, especially when combined with techniques like stratified sampling.
+
+
+```{r}
+#Transfer actual dataset into new Variable
+Cluster_feature_dataset <- financial_df
+
+#Add Cluster Data as New Feature into dataset 
+Cluster_feature_dataset$Cluster <- as.factor(k_cluster_id)
+str(Cluster_feature_dataset)
+
+# set random seed
+set.seed(1999)
+#split data into 70/30 for training/testing
+n_rows <- nrow(Cluster_feature_dataset)
+# sample 70% (n_rows * 0.7) indices in the ranges 1:nrows
+train_test_index <- sample(n_rows, n_rows * 0.7)
+# filter the data frame with the training indices (and the complement)
+train_to_data <- Cluster_feature_dataset[train_test_index,]
+test_to_data <- Cluster_feature_dataset[-train_test_index,]
+
+#Before training make sure that target variable is a factor
+train_to_data$Risk.Rating <- as.factor(train_to_data$Risk.Rating)
+
+# this build a strong model using a 200 trees
+Cluster_rf_train <- randomForest(Risk.Rating ~ ., data = train_to_data, ntree = 200, importance = TRUE)
+
+# plot the error rates
+{plot(Cluster_rf_train)
+legend('topright', colnames(Cluster_rf_train$err.rate), bty = 'n', lty = c(1,2,3), col = c(1:3))}
+
+# plot the variable importancea according to the
+varImpPlot(Cluster_rf_train, type = 1)
+```
+
+```{r}
+# compute the prediction for the random forest model
+Cluster_rf_test <- predict(Cluster_rf_train, test_to_data, type = "class")
+```
+
+```{r}
+# create a contingency table for the actual VS predicted for the random forest model
+rf_result_table <- table(predicted = Cluster_rf_test, actual = test_to_data$Risk.Rating)
+rf_result_table
+```
+
+```{r}
+# Confusion matrix
+conf_matrix <- confusionMatrix(Cluster_rf_test, test_to_data$Risk.Rating)
+print(conf_matrix)
+
+```
+
+
+A Random Forest model was applied using real dataset information, which included the cluster grouping data generated through K-means clustering. The resulting model demonstrated subpar predictive performance, with an accuracy of 0.5884 and a Kappa score of -0.0035. Incorporating the cluster information into the model turned out to be unhelpful, as it resulted in worse outcomes and possibly introduced additional data noise. The model struggles to learn significant patterns from High and Medium risk classes because the actual dataset contains an extreme class imbalance. Building a fresh model with the original dataset but omitting the Cluster feature gained our attention to determine its effects on accuracy stability.
+
+## 3.1 Using Simple Random Forest Model on Actual Dataset
+## 3.1.1 Training + Testing
+
+```{r}
+# set random seed
+set.seed(1999)
+#split data into 70/30 for training/testing
+n_rows <- nrow(financial_df)
+# sample 70% (n_rows * 0.7) indices in the ranges 1:nrows
+training_index <- sample(n_rows, n_rows * 0.7)
+# filter the data frame with the training indices (and the complement)
+train_data <- financial_df[training_index,]
+test_data <- financial_df[-training_index,]
+
+#Before training make sure that target variable is a factor
+train_data$Risk.Rating <- as.factor(train_data$Risk.Rating)
+
+start_time <- Sys.time()
+
+# this build a strong model using a 200 trees
+rf_train <- randomForest(Risk.Rating ~ ., data = train_data, ntree = 200, importance = TRUE)
+
+end_time <- Sys.time()
+
+# plot the error rates
+{plot(rf_train)
+legend('topright', colnames(rf_train$err.rate), bty = 'n', lty = c(1,2,3), col = c(1:3))}
+
+# plot the variable importancea according to the
+varImpPlot(rf_train, type = 1)
+```
+```{r}
+# Calculate time difference
+training_duration <- end_time - start_time
+print(training_duration)
+```
+
+## 3.1.2 Prediction
+
+```{r}
+# compute the prediction for the random forest model
+rf_test <- predict(rf_train, test_data, type = "class")
+```
+
+
+## 3.1.3 Performance Evaluation
+```{r}
+# create a contingency table for the actual VS predicted for the random forest model
+rf_result_table <- table(predicted = rf_test, actual = test_data$Risk.Rating)
+rf_result_table
+```
+
+```{r}
+# Confusion matrix
+conf_matrix <- confusionMatrix(rf_test, test_data$Risk.Rating)
+print(conf_matrix)
+```
+
+```{r}
+# calculate accuracy from each contigency table
+#   as sum of diagonal elements over sum of the matrix values
+acc_rf <- sum(diag(rf_result_table)) / sum(rf_result_table)
+acc_rf
+```
+
+
+
+The information provided shows that the standard Random Forest model is not achieving satisfactory performance. Besides neglecting the minority classes (High and Medium), the model's accuracy and Kappa score are still low, suggesting it is struggling to effectively recognize the underrepresented classes. Furthermore, a model trained on the actual dataset without the Cluster feature showed no improvement, with accuracy and Kappa scores nearly identical to the model that included the cluster feature. The analysis indicates that the clustering approach added no value to predictive capability. We will use stratified sampling and SMOTE sampling for addressing the ongoing class imbalance problem. The Random Forest model will receive improvements through integrating stratified sampling and SMOTE sampling while employing 5-fold cross-validation and 200 trees to enhance generalization and identify minority class instances accurately.
+
+
+## 3.2 Employing Random Forest with hyperparameter tuning on stratified sampling ensures that the Risk Rating variable is proportionally divided between the training and testing datasets. Additionally, SMOTE will generate realistic data to balance the minority classes during the training phase, allowing for improved model training.
+
+# 3.2.1 Training + Tuning 
+```{r}
+# set random seed
+set.seed(1999)
+# Use Stratified sampling so that each Risk Rating class is proportionally represented in both training and testing sets.
+split_Data <- createDataPartition(financial_df$Risk.Rating, p = 0.7, list = FALSE)
+training_data <- financial_df[split_Data, ]
+testing_data  <- financial_df[-split_Data, ]
+
+# Define control method with cross-validation
+ctrl_parameters <- trainControl(method = 'CV', number = 5, sampling = "smote", classProbs = TRUE, summaryFunction = multiClassSummary)
+
+# Define tuning grid
+tune_grid <- expand.grid(.mtry = c(2, 4, 6, 8,12,15))
+
+# check the tunable parameter available for rf
+modelLookup('rf')
+
+# train a Random forests model using caret train function
+risk_rf <- train(Risk.Rating ~ ., data = training_data, method = "rf", metric = "Kappa", tuneGrid = tune_grid, 
+                  trControl = ctrl_parameters, ntree = 200)
+print(risk_rf)
+plot(risk_rf)
+```
+
+## 3.2.2 Prediction
+```{r}
+# compute prediction with the Random forest model
+risk_rf_predict <- cbind(
+  actual = testing_data$Risk.Rating,
+  predicted = predict(risk_rf, testing_data[,-17], type = 'raw'),
+  predict(risk_rf, testing_data[, -17], type = 'prob')
+)
+```
+
+
+## 3.2.3 Performance Evaluation
+```{r}
+# generate a confusion matrix for the each predicted class and check the accuracy of the model
+rf_confused_matrix <- confusionMatrix(data = risk_rf_predict$predicted, reference = risk_rf_predict$actual)
+rf_confused_matrix
+```
+
+```{r}
+#Check whether positive predicted values are in actual positive or not for each class
+rf_confused_matrix$byClass[, "Precision"]
+```
+
+```{r}
+# Check Overall Multiclass AUC Score by averaging the one-vs-all AUCs
+multiclass_result <- multiclass.roc(risk_rf_predict$actual, risk_rf_predict[, c("High", "Medium", "Low")])
+print(multiclass_result)
+```
+
+```{r}
+# check One-vs-all AUCs seperatly
+auc_high <- roc(risk_rf_predict$actual == "High", risk_rf_predict$High)$auc
+auc_medium <- roc(risk_rf_predict$actual == "Medium", risk_rf_predict$Medium)$auc
+auc_low <- roc(risk_rf_predict$actual == "Low", risk_rf_predict$Low)$auc
+print(c(High = auc_high, Medium = auc_medium, Low = auc_low))
+```
+
+```{r}
+# Compute ROC objects
+roc_high <- roc(risk_rf_predict$actual == "High", risk_rf_predict$High)
+roc_medium <- roc(risk_rf_predict$actual == "Medium", risk_rf_predict$Medium)
+roc_low <- roc(risk_rf_predict$actual == "Low", risk_rf_predict$Low)
+
+# Plot the  ROC curves to check how  model performs at all threshold levels.
+{
+plot(roc_high, col = "red", main = "One-vs-All ROC Curves", lwd = 2, print.auc = TRUE)
+
+# Add the other ROC curves to the same plot
+plot(roc_medium, col = "blue", add = TRUE, lwd = 2, print.auc = TRUE, print.auc.y = 0.4)
+plot(roc_low, col = "green", add = TRUE, lwd = 2, print.auc = TRUE, print.auc.y = 0.3)
+
+# Add a legend
+legend("bottomright",
+       legend = c("High vs (Medium + Low)", "Medium vs (High + Low)", "Low vs (High + Medium)"),
+       col = c("red", "blue", "green"),
+       lwd = 2)
+}
+
+```
+
+The performance assessment primarily used accuracy combined with precision measurements together with confusion matrix results to measure prediction accuracy for classes. Detection of high-risk defaulters  proved challenging for the model as it produced fewer predictions in this category while maintaining accurate results for both Low and Medium cases.
+
+SMOTE (Synthetic Minority Over-sampling Technique) was used to perform training data balancing. Training with improved class distribution led to greater model performance however it continued to display weak performance on the "High" class in the test results as model bias mainly focused on the majority classes.
+
+The evaluation procedure revealed both strengths along with weaknesses of the model including its tendency to respond differently to class balance issues. Future developments in the model will either evaluate threshold settings or conduct feature reengineering work or establish class-weighted approaches to enhance efficiency for marginal classes.
+
+
